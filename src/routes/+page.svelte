@@ -1,4 +1,25 @@
 <script lang='ts'>
+  import type { DndEvent } from 'svelte-dnd-action'
+  import Button from '$lib/components/Button.svelte'
+  import { dndzone, dragHandle, dragHandleZone } from 'svelte-dnd-action'
+  import { flip } from 'svelte/animate'
+
+  interface TierItem {
+    id: number
+    src: string
+  }
+
+  interface Tier {
+    id: number
+    label: string
+    color: string
+    items: TierItem[]
+  }
+
+  const FLIP_MS = 150
+  const ZONE_TYPE = 'tierlist'
+  const TIER_ZONE_TYPE = 'tier-rows'
+
   const PALETTE = [
     '#FF6B6B',
     '#FFB347',
@@ -17,17 +38,16 @@
     '#FFFFFF',
   ]
 
-  const DEFAULT_TIERS: { label: string, color: string, items: string[] }[] = [
-    { label: 'S', color: '#FF6B6B', items: [] },
-    { label: 'A', color: '#FFB347', items: [] },
-    { label: 'B', color: '#FFFF66', items: [] },
-    { label: 'C', color: '#66FF66', items: [] },
-    { label: 'F', color: '#6666FF', items: [] },
-  ]
-
-  const tiers = $state(structuredClone(DEFAULT_TIERS))
-  const pool = $state<string[]>([])
-  let dragItem = $state<{ source: 'pool' | number, index: number } | null>(null)
+  let nextId = $state(1)
+  let nextTierId = $state(6)
+  const tiers: Tier[] = $state([
+    { id: 1, label: 'S', color: '#FF6B6B', items: [] },
+    { id: 2, label: 'A', color: '#FFB347', items: [] },
+    { id: 3, label: 'B', color: '#FFFF66', items: [] },
+    { id: 4, label: 'C', color: '#66FF66', items: [] },
+    { id: 5, label: 'F', color: '#6666FF', items: [] },
+  ])
+  let pool: TierItem[] = $state([])
   let editingTier = $state<number | null>(null)
   let editingLabel = $state('')
   let colorPickerTier = $state<number | null>(null)
@@ -47,7 +67,7 @@
     if (tiers.length >= 10)
       return
     const nextColor = PALETTE[tiers.length % PALETTE.length]
-    tiers.push({ label: String.fromCharCode(65 + tiers.length), color: nextColor, items: [] })
+    tiers.push({ id: nextTierId++, label: '', color: nextColor, items: [] })
   }
 
   function removeTier(index: number) {
@@ -55,55 +75,48 @@
     tiers.splice(index, 1)
   }
 
-  function handleFiles(e: Event) {
-    const input = e.currentTarget as HTMLInputElement
-    const files = input.files
-    if (!files)
-      return
+  function processFiles(files: FileList) {
     for (const file of files) {
       if (!file.type.startsWith('image/'))
         continue
       const reader = new FileReader()
       reader.onload = () => {
-        pool.push(reader.result as string)
+        pool.push({ id: nextId++, src: reader.result as string })
       }
       reader.readAsDataURL(file)
     }
+  }
+
+  function handleFiles(e: Event) {
+    const input = e.currentTarget as HTMLInputElement
+    const files = input.files
+    if (!files)
+      return
+    processFiles(files)
     input.value = ''
   }
 
-  function onDragStart(source: 'pool' | number, index: number) {
-    dragItem = { source, index }
+  function handleNativeFileDrop(e: DragEvent) {
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      e.preventDefault()
+      processFiles(e.dataTransfer.files)
+    }
   }
 
-  function onDropOnTier(tierIndex: number) {
-    if (!dragItem)
-      return
-    let item: string
-    if (dragItem.source === 'pool') {
-      item = pool.splice(dragItem.index, 1)[0]
-    }
-    else {
-      item = tiers[dragItem.source].items.splice(dragItem.index, 1)[0]
-    }
-    tiers[tierIndex].items.push(item)
-    dragItem = null
+  function handleTierConsider(i: number, e: CustomEvent<DndEvent<TierItem>>) {
+    tiers[i].items = e.detail.items
   }
 
-  function onDropOnPool() {
-    if (!dragItem)
-      return
-    if (dragItem.source === 'pool') {
-      dragItem = null
-      return
-    }
-    const item = tiers[dragItem.source].items.splice(dragItem.index, 1)[0]
-    pool.push(item)
-    dragItem = null
+  function handleTierFinalize(i: number, e: CustomEvent<DndEvent<TierItem>>) {
+    tiers[i].items = e.detail.items
   }
 
-  function allowDrop(e: DragEvent) {
-    e.preventDefault()
+  function handlePoolConsider(e: CustomEvent<DndEvent<TierItem>>) {
+    pool = e.detail.items
+  }
+
+  function handlePoolFinalize(e: CustomEvent<DndEvent<TierItem>>) {
+    pool = e.detail.items
   }
 
   function startEditLabel(index: number) {
@@ -113,7 +126,7 @@
 
   function finishEditLabel() {
     if (editingTier !== null) {
-      tiers[editingTier].label = editingLabel || tiers[editingTier].label
+      tiers[editingTier].label = editingLabel
       editingTier = null
     }
   }
@@ -135,11 +148,25 @@
     return lum > 0.5 ? '#000' : '#fff'
   }
 
-  function moveTier(index: number, direction: -1 | 1) {
-    const target = index + direction
-    if (target < 0 || target >= tiers.length)
-      return;
-    [tiers[index], tiers[target]] = [tiers[target], tiers[index]]
+  function handleTierRowConsider(e: CustomEvent<DndEvent<Tier>>) {
+    // Need to preserve items arrays since dnd-action replaces them
+    const newTiers = e.detail.items
+    for (const t of newTiers) {
+      if (!t.items)
+        t.items = []
+    }
+    tiers.length = 0
+    tiers.push(...newTiers)
+  }
+
+  function handleTierRowFinalize(e: CustomEvent<DndEvent<Tier>>) {
+    const newTiers = e.detail.items
+    for (const t of newTiers) {
+      if (!t.items)
+        t.items = []
+    }
+    tiers.length = 0
+    tiers.push(...newTiers)
   }
 
   function openLightbox(src: string) {
@@ -149,6 +176,12 @@
   function closeLightbox() {
     lightboxSrc = null
   }
+
+  $effect(() => {
+    const s = document.documentElement.style
+    s.setProperty('--tier-count', String(tiers.length))
+    s.setProperty('--item-size', `max(5rem, calc(60vh / ${tiers.length}))`)
+  })
 </script>
 
 <svelte:window onkeydown={e => e.key === 'Escape' && closeLightbox()} />
@@ -159,14 +192,15 @@
     <p class='subtitle'>Drag and drop images into tiers</p>
   </header>
 
-  <div class='tierlist'>
-    {#each tiers as tier, i}
-      <div class='tier-row' role='listitem' ondragover={allowDrop} ondrop={() => onDropOnTier(i)}>
-        <div class='tier-label' style='background: {tier.color}; color: {textColor(tier.color)}'>
-          <div class='tier-controls-top'>
-            <button class='tier-move' onclick={() => moveTier(i, -1)} disabled={i === 0} title='Move up'>&uarr;</button>
-            <button class='tier-move' onclick={() => moveTier(i, 1)} disabled={i === tiers.length - 1} title='Move down'>&darr;</button>
-          </div>
+  <div
+    class='tierlist'
+    use:dragHandleZone={{ items: tiers, flipDurationMs: FLIP_MS, type: TIER_ZONE_TYPE }}
+    onconsider={handleTierRowConsider}
+    onfinalize={handleTierRowFinalize}
+  >
+    {#each tiers as tier, i (tier.id)}
+      <div class='tier-row' animate:flip={{ duration: FLIP_MS }}>
+        <div class='tier-label-wrapper' style='background: {tier.color}; color: {textColor(tier.color)}'>
           {#if editingTier === i}
             <!-- svelte-ignore a11y_autofocus -->
             <input
@@ -178,9 +212,12 @@
               style='color: {textColor(tier.color)}'
             />
           {:else}
-            <button class='label-text' ondblclick={() => startEditLabel(i)}>{tier.label}</button>
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class='tier-label' use:dragHandle ondblclick={() => startEditLabel(i)}>
+              <span class='label-text'>{tier.label}</span>
+            </div>
           {/if}
-          <div class='tier-controls-bottom'>
+          <div class='tier-controls'>
             <button
               class='color-swatch-btn'
               style='background: {tier.color}'
@@ -203,18 +240,18 @@
             </div>
           {/if}
         </div>
-        <div class='tier-items'>
-          {#each tier.items as item, j}
-            <div
-              class='item'
-              draggable='true'
-              ondragstart={() => onDragStart(i, j)}
-              role='listitem'
-            >
-              <button class='item-img-btn' onclick={() => openLightbox(item)}>
-                <img src={item} alt='' class='item-img' />
+        <div
+          class='tier-items'
+          use:dndzone={{ items: tier.items, flipDurationMs: FLIP_MS, type: ZONE_TYPE }}
+          onconsider={e => handleTierConsider(i, e)}
+          onfinalize={e => handleTierFinalize(i, e)}
+        >
+          {#each tier.items as item (item.id)}
+            <div class='item' animate:flip={{ duration: FLIP_MS }}>
+              <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
+                <img src={item.src} alt='' class='item-img' />
               </button>
-              <button class='item-remove' onclick={() => removeItemFromTier(i, j)}>&times;</button>
+              <button class='item-remove' onclick={() => removeItemFromTier(i, tier.items.indexOf(item))}>&times;</button>
             </div>
           {/each}
         </div>
@@ -223,38 +260,50 @@
   </div>
 
   {#if tiers.length < 10}
-    <button class='add-tier-btn' onclick={addTier}>+ Add Tier</button>
+    <div class='add-tier-wrapper'>
+      <Button onclick={addTier} full>+ Add Tier</Button>
+    </div>
   {/if}
 
   <div class='pool-section'>
-    <h2>Images</h2>
-    <div class='add-item'>
-      <input
-        bind:this={fileInput}
-        type='file'
-        accept='image/*'
-        multiple
-        onchange={handleFiles}
-        hidden
-      />
-      <button class='upload-btn' onclick={() => fileInput?.click()}>Choose Images...</button>
-    </div>
-    <div class='pool' role='list' ondragover={allowDrop} ondrop={onDropOnPool}>
-      {#each pool as item, i}
-        <div
-          class='item'
-          draggable='true'
-          ondragstart={() => onDragStart('pool', i)}
-          role='listitem'
-        >
-          <button class='item-img-btn' onclick={() => openLightbox(item)}>
-            <img src={item} alt='' class='item-img' />
+    <input
+      bind:this={fileInput}
+      type='file'
+      accept='image/*'
+      multiple
+      onchange={handleFiles}
+      hidden
+    />
+    <div
+      class='pool'
+      class:pool-empty={pool.length === 0}
+      role='list'
+      use:dndzone={{ items: pool, flipDurationMs: FLIP_MS, type: ZONE_TYPE }}
+      onconsider={handlePoolConsider}
+      onfinalize={handlePoolFinalize}
+      ondragover={e => e.preventDefault()}
+      ondrop={handleNativeFileDrop}
+    >
+      <button class='pool-empty-state' style:display={pool.length === 0 ? 'flex' : 'none'} onclick={() => fileInput?.click()}>
+        <svg class='upload-icon' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'>
+          <path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' />
+          <polyline points='17 8 12 3 7 8' />
+          <line x1='12' y1='3' x2='12' y2='15' />
+        </svg>
+        <span class='pool-empty-title'>Drop images here or click to upload</span>
+        <span class='pool-empty-hint'>Supports JPG, PNG, GIF, WebP</span>
+      </button>
+      {#each pool as item (item.id)}
+        <div class='item' animate:flip={{ duration: FLIP_MS }}>
+          <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
+            <img src={item.src} alt='' class='item-img' />
           </button>
-          <button class='item-remove' onclick={() => removeItemFromPool(i)}>&times;</button>
+          <button class='item-remove' onclick={() => removeItemFromPool(pool.indexOf(item))}>&times;</button>
         </div>
-      {:else}
-        <p class='pool-empty'>Upload images above, then drag them into tiers</p>
       {/each}
+      {#if pool.length > 0}
+        <button class='pool-add-btn' onclick={() => fileInput?.click()} title='Add more images'>+</button>
+      {/if}
     </div>
   </div>
 </div>
@@ -270,124 +319,125 @@
 
 <style>
   .app {
-    max-width: 900px;
+    width: 80%;
     margin: 0 auto;
-    padding: 20px;
+    padding: 2rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
   }
 
   header {
     text-align: center;
-    margin-bottom: 24px;
   }
 
   h1 {
     font-size: 2rem;
     margin: 0;
-    background: linear-gradient(90deg, #FF6B6B, #FFB347, #FFFF66, #66FF66, #6666FF);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--color-primary);
   }
 
   .subtitle {
-    margin: 4px 0 0;
-    color: #888;
+    margin: 0.25rem 0 0;
+    color: var(--color-text-muted);
     font-size: 0.9rem;
   }
 
   .tierlist {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    border-radius: 8px;
+    gap: 0.125rem;
+    border-radius: var(--radius-lg);
     overflow: hidden;
-    border: 2px solid #333;
+    border: 0.125rem solid var(--color-border);
   }
 
   .tier-row {
     display: flex;
-    min-height: 80px;
-    background: #16213e;
+    min-height: var(--item-size);
+    background: var(--color-surface-raised);
   }
 
-  .tier-label {
-    width: 100px;
-    min-width: 100px;
+  .tier-label-wrapper {
+    width: var(--item-size);
+    min-width: var(--item-size);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     font-weight: bold;
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     position: relative;
-    padding: 4px;
-    gap: 2px;
+    padding: 0.25rem;
+    word-break: break-word;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .tier-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    cursor: grab;
+  }
+
+  .tier-label:active {
+    cursor: grabbing;
   }
 
   .label-text {
-    background: none;
-    border: none;
     color: inherit;
     font: inherit;
-    cursor: pointer;
-    padding: 2px 8px;
-    border-radius: 4px;
-  }
-
-  .label-text:hover {
-    background: rgba(0,0,0,0.15);
+    padding: 0.125rem 0.25rem;
+    word-break: break-word;
+    text-align: center;
   }
 
   .label-input {
-    width: 60px;
+    width: 90%;
     text-align: center;
     background: rgba(0,0,0,0.2);
-    border: 1px solid rgba(0,0,0,0.3);
-    border-radius: 4px;
-    font-size: 1.2rem;
+    border: 0.0625rem solid rgba(0,0,0,0.3);
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
     font-weight: bold;
-    padding: 2px;
+    padding: 0.25rem;
   }
 
-  .tier-controls-top,
-  .tier-controls-bottom {
+  .tier-controls {
+    position: absolute;
+    bottom: 0.25rem;
     display: flex;
-    gap: 2px;
+    gap: 0.125rem;
     opacity: 0;
     transition: opacity 0.15s;
   }
 
-  .tier-row:hover .tier-controls-top,
-  .tier-row:hover .tier-controls-bottom {
+  .tier-row:hover .tier-controls {
     opacity: 1;
   }
 
-  .tier-move,
   .tier-remove {
     background: rgba(0,0,0,0.25);
     border: none;
     color: inherit;
     cursor: pointer;
     font-size: 0.7rem;
-    padding: 1px 5px;
-    border-radius: 3px;
+    padding: 0.0625rem 0.3125rem;
+    border-radius: 0.1875rem;
     line-height: 1;
   }
 
-  .tier-move:hover,
   .tier-remove:hover {
     background: rgba(0,0,0,0.45);
   }
 
-  .tier-move:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
-
   .color-swatch-btn {
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(0,0,0,0.3);
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 0.125rem solid rgba(0,0,0,0.3);
     border-radius: 50%;
     cursor: pointer;
     padding: 0;
@@ -399,25 +449,25 @@
 
   .color-popover {
     position: absolute;
-    left: 105px;
+    left: 100%;
     top: 50%;
     transform: translateY(-50%);
-    background: #1a1a2e;
-    border: 1px solid #444;
-    border-radius: 8px;
-    padding: 8px;
+    background: var(--color-surface);
+    border: 0.0625rem solid var(--color-border-hover);
+    border-radius: var(--radius-lg);
+    padding: 0.5rem;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 6px;
+    gap: 0.375rem;
     z-index: 10;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    box-shadow: 0 0.25rem 1rem rgba(0,0,0,0.5);
   }
 
   .palette-color {
-    width: 24px;
-    height: 24px;
+    width: 1.5rem;
+    height: 1.5rem;
     border-radius: 50%;
-    border: 2px solid #444;
+    border: 0.125rem solid var(--color-border-hover);
     cursor: pointer;
     transition: transform 0.1s;
     padding: 0;
@@ -430,7 +480,7 @@
 
   .palette-color.selected {
     border-color: #fff;
-    box-shadow: 0 0 0 2px #fff;
+    box-shadow: 0 0 0 0.125rem #fff;
   }
 
   .tier-items {
@@ -439,9 +489,7 @@
     flex-wrap: wrap;
     align-items: flex-start;
     align-content: flex-start;
-    padding: 6px;
-    gap: 6px;
-    min-height: 80px;
+    gap: 0.125rem;
   }
 
   .item {
@@ -460,29 +508,29 @@
     border: none;
     padding: 0;
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
   }
 
   .item-img {
-    width: 70px;
-    height: 70px;
+    width: var(--item-size);
+    height: var(--item-size);
     object-fit: cover;
     display: block;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
   }
 
   .item-remove {
     position: absolute;
-    top: -6px;
-    right: -6px;
+    top: -0.375rem;
+    right: -0.375rem;
     background: rgba(0,0,0,0.7);
     border: none;
     color: #fff;
     cursor: pointer;
     font-size: 0.8rem;
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -497,70 +545,91 @@
   }
 
   .item-remove:hover {
-    background: #ff4444;
-  }
-
-  .add-tier-btn {
-    margin-top: 8px;
-    padding: 8px 20px;
-    background: #2a2a4a;
-    color: #ccc;
-    border: 1px dashed #555;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    width: 100%;
-  }
-
-  .add-tier-btn:hover {
-    background: #333366;
-    border-color: #777;
-  }
-
-  .pool-section {
-    margin-top: 32px;
-  }
-
-  .pool-section h2 {
-    margin: 0 0 12px;
-    font-size: 1.1rem;
-    color: #aaa;
-  }
-
-  .add-item {
-    margin-bottom: 12px;
-  }
-
-  .upload-btn {
-    padding: 10px 20px;
-    background: #4a4aff;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.95rem;
-  }
-
-  .upload-btn:hover {
-    background: #5c5cff;
+    background: var(--color-danger);
   }
 
   .pool {
-    min-height: 80px;
-    background: #16213e;
-    border: 2px dashed #333;
-    border-radius: 8px;
-    padding: 12px;
+    min-height: var(--item-size);
+    background: var(--color-surface);
+    border: 0.0625rem solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 0.75rem;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 0.375rem;
+    align-items: flex-start;
+    align-content: flex-start;
+    transition: border-color 0.15s, background 0.15s;
+    box-shadow: inset 0 0.125rem 0.5rem rgba(0, 0, 0, 0.4);
   }
 
-  .pool-empty {
-    color: #555;
-    margin: 0;
-    font-size: 0.85rem;
+  .pool:hover {
+    border-color: var(--color-border-hover);
+  }
+
+  .pool.pool-empty {
+    min-height: 11.25rem;
+    padding: 0;
+    align-items: stretch;
+    align-content: stretch;
+    border-style: solid;
+  }
+
+  .pool-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-faint);
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+    transition: color 0.15s, background 0.15s;
+    font-family: inherit;
+  }
+
+  .pool-empty-state:hover {
+    color: var(--color-primary);
+    background: rgba(232, 169, 18, 0.04);
+  }
+
+  .upload-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .pool-empty-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  .pool-empty-hint {
+    font-size: 0.75rem;
+    opacity: 0.6;
+  }
+
+  .pool-add-btn {
+    width: var(--item-size);
+    height: var(--item-size);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--color-primary);
+    color: var(--color-primary-text);
+    font-size: 1.5rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+
+  .pool-add-btn:hover {
+    background: var(--color-primary-hover);
   }
 
   .lightbox {
@@ -576,8 +645,8 @@
 
   .lightbox-close {
     position: absolute;
-    top: 20px;
-    right: 24px;
+    top: 1.25rem;
+    right: 1.5rem;
     background: none;
     border: none;
     color: #fff;
@@ -587,7 +656,7 @@
   }
 
   .lightbox-close:hover {
-    color: #ff4444;
+    color: var(--color-danger);
   }
 
   .lightbox-img-btn {
@@ -601,6 +670,6 @@
     max-width: 90vw;
     max-height: 90vh;
     object-fit: contain;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
   }
 </style>

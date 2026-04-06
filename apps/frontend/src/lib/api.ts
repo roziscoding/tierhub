@@ -20,21 +20,49 @@ export interface Template {
 
 export type TemplateSummary = Omit<Template, 'items'>
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    credentials: 'include',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  })
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status}`)
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
   }
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      credentials: 'include',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
+  }
+  catch {
+    throw new ApiError(0, 'Network error — check your connection')
+  }
+
   if (res.status === 204)
     return undefined as T
-  return res.json()
+
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`
+    try {
+      const body = await res.json()
+      if (body?.error)
+        message = body.error
+    }
+    catch {}
+    throw new ApiError(res.status, message)
+  }
+
+  try {
+    return await res.json()
+  }
+  catch {
+    throw new ApiError(res.status, 'Invalid response from server')
+  }
 }
 
 export function listTemplates(): Promise<TemplateSummary[]> {
@@ -42,7 +70,11 @@ export function listTemplates(): Promise<TemplateSummary[]> {
 }
 
 export function getTemplate(id: string): Promise<Template | null> {
-  return request<Template>(`/templates/${id}`).catch(() => null)
+  return request<Template>(`/templates/${id}`).catch((err) => {
+    if (err instanceof ApiError && err.status === 404)
+      return null
+    throw err
+  })
 }
 
 export async function saveTemplate(data: {

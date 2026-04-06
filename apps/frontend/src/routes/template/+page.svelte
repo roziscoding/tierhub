@@ -43,6 +43,7 @@
   let title = $state('')
   let description = $state('')
   let saving = $state(false)
+  let saveError = $state('')
   let colorPickerTier = $state<number | null>(null)
   let lightboxSrc = $state<string | null>(null)
   let fileInput = $state<HTMLInputElement | null>(null)
@@ -131,6 +132,7 @@
 
   async function save() {
     saving = true
+    saveError = ''
     try {
       await saveTemplate({
         title,
@@ -139,6 +141,9 @@
         items: pool.map(i => ({ src: i.src })),
       })
       window.location.href = `${base}/`
+    }
+    catch (err) {
+      saveError = err instanceof Error ? err.message : 'Failed to save template'
     }
     finally {
       saving = false
@@ -278,6 +283,10 @@
       {/if}
     </div>
   </section>
+
+  {#if saveError}
+    <p class='save-error'>{saveError}</p>
+  {/if}
 
   <Button onclick={save} full disabled={saving || !title.trim() || pool.length === 0 || tiers.length === 0}>
     {saving ? 'Saving...' : 'Save Template'}
@@ -648,5 +657,12 @@
     max-height: 90vh;
     object-fit: contain;
     border-radius: var(--radius-lg);
+  }
+
+  .save-error {
+    color: var(--color-danger);
+    font-size: 0.85rem;
+    margin: 0;
+    text-align: center;
   }
 </style>

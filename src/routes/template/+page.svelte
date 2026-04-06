@@ -1,22 +1,12 @@
 <script lang='ts'>
+  import type { Tier, TierItem } from '$lib/types'
   import type { DndEvent } from 'svelte-dnd-action'
 
   import Button from '$lib/components/Button.svelte'
+  import TierItemComponent from '$lib/components/TierItem.svelte'
   import { saveTemplate } from '$lib/db'
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action'
   import { flip } from 'svelte/animate'
-
-  interface TierItem {
-    id: number
-    src: string
-  }
-
-  interface Tier {
-    id: number
-    label: string
-    color: string
-    items: TierItem[]
-  }
 
   const FLIP_MS = 150
   const TIER_ZONE_TYPE = 'tier-rows'
@@ -264,12 +254,13 @@
         ondrop={handleNativeFileDrop}
       >
         {#each pool as item, i (item.id)}
-          <div class='item'>
-            <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
-              <img src={item.src} alt='' class='item-img' />
-            </button>
-            <button class='item-remove' onclick={() => removeItemFromPool(i)}>&times;</button>
-          </div>
+          <TierItemComponent
+            src={item.src}
+            removable
+            onlightbox={() => openLightbox(item.src)}
+            onremove={() => removeItemFromPool(i)}
+            onmiddleclick={() => removeItemFromPool(i)}
+          />
         {/each}
       </div>
       {#if pool.length > 0}
@@ -522,57 +513,6 @@
     box-shadow: 0 0 0 0.125rem #fff;
   }
 
-  .item {
-    position: relative;
-    user-select: none;
-  }
-
-  .item-img-btn {
-    display: block;
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-  }
-
-  .item-img {
-    width: 5rem;
-    height: 5rem;
-    object-fit: cover;
-    display: block;
-    border-radius: var(--radius-sm);
-  }
-
-  .item-remove {
-    position: absolute;
-    top: -0.375rem;
-    right: -0.375rem;
-    background: rgba(0,0,0,0.7);
-    border: none;
-    color: #fff;
-    cursor: pointer;
-    font-size: 0.8rem;
-    width: 1.125rem;
-    height: 1.125rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-    opacity: 0;
-    transition: opacity 0.15s;
-  }
-
-  .item:hover .item-remove {
-    opacity: 1;
-  }
-
-  .item-remove:hover {
-    background: var(--color-danger);
-  }
-
   .pool-wrapper {
     position: relative;
     min-height: 5rem;
@@ -640,8 +580,8 @@
   }
 
   .pool-add-btn {
-    width: 5rem;
-    height: 5rem;
+    width: var(--item-size, 5rem);
+    height: var(--item-size, 5rem);
     border: none;
     border-radius: var(--radius-sm);
     background: var(--color-primary);

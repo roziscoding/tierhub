@@ -1,49 +1,16 @@
 <script lang='ts'>
-  import type { DndEvent } from 'svelte-dnd-action'
+  import type { Tier, TierItem } from '$lib/types'
 
   import { page } from '$app/stores'
-  import Button from '$lib/components/Button.svelte'
+  import TierlistEditor from '$lib/components/TierlistEditor.svelte'
   import { getTemplate } from '$lib/db'
-  import { exportTierlistAsImage } from '$lib/export'
   import { onMount } from 'svelte'
-  import { dndzone } from 'svelte-dnd-action'
-  import { flip } from 'svelte/animate'
-
-  interface TierItem {
-    id: number
-    src: string
-  }
-
-  interface Tier {
-    id: number
-    label: string
-    color: string
-    items: TierItem[]
-  }
-
-  const FLIP_MS = 150
-  const ZONE_TYPE = 'tierlist'
 
   let title = $state('')
   let description = $state('')
-  const tiers: Tier[] = $state([])
+  let tiers: Tier[] = $state([])
   let pool: TierItem[] = $state([])
   let loading = $state(true)
-  let lightboxSrc = $state<string | null>(null)
-  let tierlistEl = $state<HTMLElement | null>(null)
-  let exporting = $state(false)
-
-  async function exportImage() {
-    if (!tierlistEl)
-      return
-    exporting = true
-    try {
-      await exportTierlistAsImage(tierlistEl, `${title || 'tierlist'}.png`)
-    }
-    finally {
-      exporting = false
-    }
-  }
 
   onMount(async () => {
     const id = Number($page.params.id)
@@ -67,50 +34,7 @@
     })))
     loading = false
   })
-
-  function handleTierConsider(i: number, e: CustomEvent<DndEvent<TierItem>>) {
-    tiers[i].items = e.detail.items
-  }
-
-  function handleTierFinalize(i: number, e: CustomEvent<DndEvent<TierItem>>) {
-    tiers[i].items = e.detail.items
-  }
-
-  function handlePoolConsider(e: CustomEvent<DndEvent<TierItem>>) {
-    pool = e.detail.items
-  }
-
-  function handlePoolFinalize(e: CustomEvent<DndEvent<TierItem>>) {
-    pool = e.detail.items
-  }
-
-  function textColor(bg: string): string {
-    const hex = bg.replace('#', '')
-    const r = Number.parseInt(hex.substring(0, 2), 16)
-    const g = Number.parseInt(hex.substring(2, 4), 16)
-    const b = Number.parseInt(hex.substring(4, 6), 16)
-    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-    return lum > 0.5 ? '#000' : '#fff'
-  }
-
-  function openLightbox(src: string) {
-    lightboxSrc = src
-  }
-
-  function closeLightbox() {
-    lightboxSrc = null
-  }
-
-  $effect(() => {
-    if (tiers.length === 0)
-      return
-    const s = document.documentElement.style
-    s.setProperty('--tier-count', String(tiers.length))
-    s.setProperty('--item-size', `max(5rem, calc(60vh / ${tiers.length}))`)
-  })
 </script>
-
-<svelte:window onkeydown={e => e.key === 'Escape' && closeLightbox()} />
 
 {#if loading}
   <div class='loading'>Loading...</div>
@@ -124,65 +48,7 @@
       {/if}
     </header>
 
-    <div class='tierlist' bind:this={tierlistEl}>
-      {#each tiers as tier, i (tier.id)}
-        <div class='tier-row'>
-          <div class='tier-label-wrapper' style='background: {tier.color}; color: {textColor(tier.color)}'>
-            <span class='label-text'>{tier.label}</span>
-          </div>
-          <div
-            class='tier-items'
-            use:dndzone={{ items: tier.items, flipDurationMs: FLIP_MS, type: ZONE_TYPE }}
-            onconsider={e => handleTierConsider(i, e)}
-            onfinalize={e => handleTierFinalize(i, e)}
-          >
-            {#each tier.items as item (item.id)}
-              <div class='item' animate:flip={{ duration: FLIP_MS }}>
-                <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
-                  <img src={item.src} alt='' class='item-img' />
-                </button>
-              </div>
-            {/each}
-          </div>
-        </div>
-      {/each}
-    </div>
-
-    <div class='pool-section'>
-      <div
-        class='pool'
-        class:pool-empty={pool.length === 0}
-        role='list'
-        use:dndzone={{ items: pool, flipDurationMs: FLIP_MS, type: ZONE_TYPE }}
-        onconsider={handlePoolConsider}
-        onfinalize={handlePoolFinalize}
-      >
-        {#if pool.length === 0}
-          <div class='pool-done'>
-            <span>All items placed!</span>
-            <Button onclick={exportImage} disabled={exporting}>
-              {exporting ? 'Exporting...' : 'Export as Image'}
-            </Button>
-          </div>
-        {/if}
-        {#each pool as item (item.id)}
-          <div class='item' animate:flip={{ duration: FLIP_MS }}>
-            <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
-              <img src={item.src} alt='' class='item-img' />
-            </button>
-          </div>
-        {/each}
-      </div>
-    </div>
-  </div>
-{/if}
-
-{#if lightboxSrc}
-  <div class='lightbox' onclick={closeLightbox} onkeydown={e => e.key === 'Escape' && closeLightbox()} role='dialog' tabindex='0'>
-    <button class='lightbox-close' onclick={closeLightbox}>&times;</button>
-    <button class='lightbox-img-btn' onclick={e => e.stopPropagation()}>
-      <img src={lightboxSrc} alt='' class='lightbox-img' />
-    </button>
+    <TierlistEditor bind:tiers bind:pool exportFilename={`${title || 'tierlist'}.png`} />
   </div>
 {/if}
 
@@ -235,157 +101,5 @@
     margin: 0.25rem 0 0;
     color: var(--color-text-muted);
     font-size: 0.9rem;
-  }
-
-  .tierlist {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    border: 0.125rem solid var(--color-border);
-  }
-
-  .tier-row {
-    display: flex;
-    min-height: var(--item-size);
-    background: var(--color-surface-raised);
-  }
-
-  .tier-label-wrapper {
-    width: var(--item-size);
-    min-width: var(--item-size);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 1.25rem;
-    padding: 0.25rem;
-    word-break: break-word;
-    text-align: center;
-    line-height: 1.2;
-  }
-
-  .label-text {
-    color: inherit;
-    font: inherit;
-    padding: 0.125rem 0.25rem;
-    word-break: break-word;
-    text-align: center;
-  }
-
-  .tier-items {
-    flex: 1;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    align-content: flex-start;
-    gap: 0.125rem;
-  }
-
-  .item {
-    position: relative;
-    cursor: grab;
-    user-select: none;
-  }
-
-  .item:active {
-    cursor: grabbing;
-  }
-
-  .item-img-btn {
-    display: block;
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-  }
-
-  .item-img {
-    width: var(--item-size);
-    height: var(--item-size);
-    object-fit: cover;
-    display: block;
-    border-radius: var(--radius-sm);
-  }
-
-  .pool {
-    position: relative;
-    min-height: var(--item-size);
-    background: var(--color-surface);
-    border: 0.0625rem solid var(--color-border);
-    border-radius: var(--radius-lg);
-    padding: 0.375rem;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.375rem;
-    align-items: flex-start;
-    align-content: flex-start;
-    transition: border-color 0.15s, background 0.15s;
-    box-shadow: inset 0 0.125rem 0.5rem rgba(0, 0, 0, 0.4);
-  }
-
-  .pool:hover {
-    border-color: var(--color-border-hover);
-  }
-
-  .pool.pool-empty {
-    min-height: 3.5rem;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .pool-done {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    color: var(--color-text-faint);
-    font-size: 0.9rem;
-    padding: 1.5rem 0.5rem;
-  }
-
-  .lightbox {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.85);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    cursor: pointer;
-  }
-
-  .lightbox-close {
-    position: absolute;
-    top: 1.25rem;
-    right: 1.5rem;
-    background: none;
-    border: none;
-    color: #fff;
-    font-size: 2rem;
-    cursor: pointer;
-    line-height: 1;
-  }
-
-  .lightbox-close:hover {
-    color: var(--color-danger);
-  }
-
-  .lightbox-img-btn {
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: default;
-  }
-
-  .lightbox-img {
-    max-width: 90vw;
-    max-height: 90vh;
-    object-fit: contain;
-    border-radius: var(--radius-lg);
   }
 </style>

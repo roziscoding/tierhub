@@ -274,16 +274,7 @@
       onchange={handleFiles}
       hidden
     />
-    <div
-      class='pool'
-      class:pool-empty={pool.length === 0}
-      role='list'
-      use:dndzone={{ items: pool, flipDurationMs: FLIP_MS, type: ZONE_TYPE }}
-      onconsider={handlePoolConsider}
-      onfinalize={handlePoolFinalize}
-      ondragover={e => e.preventDefault()}
-      ondrop={handleNativeFileDrop}
-    >
+    <div class='pool-wrapper' class:pool-empty={pool.length === 0}>
       <button class='pool-empty-state' style:display={pool.length === 0 ? 'flex' : 'none'} onclick={() => fileInput?.click()}>
         <svg class='upload-icon' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'>
           <path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' />
@@ -293,14 +284,24 @@
         <span class='pool-empty-title'>Drop images here or click to upload</span>
         <span class='pool-empty-hint'>Supports JPG, PNG, GIF, WebP</span>
       </button>
-      {#each pool as item (item.id)}
-        <div class='item' animate:flip={{ duration: FLIP_MS }}>
-          <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
-            <img src={item.src} alt='' class='item-img' />
-          </button>
-          <button class='item-remove' onclick={() => removeItemFromPool(pool.indexOf(item))}>&times;</button>
-        </div>
-      {/each}
+      <div
+        class='pool'
+        role='list'
+        use:dndzone={{ items: pool, flipDurationMs: FLIP_MS, type: ZONE_TYPE }}
+        onconsider={handlePoolConsider}
+        onfinalize={handlePoolFinalize}
+        ondragover={e => e.preventDefault()}
+        ondrop={handleNativeFileDrop}
+      >
+        {#each pool as item (item.id)}
+          <div class='item' animate:flip={{ duration: FLIP_MS }}>
+            <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
+              <img src={item.src} alt='' class='item-img' />
+            </button>
+            <button class='item-remove' onclick={() => removeItemFromPool(pool.indexOf(item))}>&times;</button>
+          </div>
+        {/each}
+      </div>
       {#if pool.length > 0}
         <button class='pool-add-btn' onclick={() => fileInput?.click()} title='Add more images'>+</button>
       {/if}
@@ -548,12 +549,13 @@
     background: var(--color-danger);
   }
 
-  .pool {
+  .pool-wrapper {
+    position: relative;
     min-height: var(--item-size);
     background: var(--color-surface);
     border: 0.0625rem solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: 0.75rem;
+    padding: 0.375rem;
     display: flex;
     flex-wrap: wrap;
     gap: 0.375rem;
@@ -563,25 +565,26 @@
     box-shadow: inset 0 0.125rem 0.5rem rgba(0, 0, 0, 0.4);
   }
 
-  .pool:hover {
+  .pool-wrapper:hover {
     border-color: var(--color-border-hover);
   }
 
-  .pool.pool-empty {
+  .pool-wrapper.pool-empty {
     min-height: 11.25rem;
-    padding: 0;
-    align-items: stretch;
-    align-content: stretch;
-    border-style: solid;
+  }
+
+  .pool {
+    display: contents;
   }
 
   .pool-empty-state {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    width: 100%;
     background: none;
     border: none;
     cursor: pointer;

@@ -2,9 +2,16 @@ import { swaggerUI } from '@hono/swagger-ui'
 import { Hono } from 'hono'
 import { describeRoute } from 'hono-openapi'
 import { resolver } from 'hono-openapi/zod'
+import { bodyLimit } from 'hono/body-limit'
 import { z } from 'zod'
 
+import templates from './routes/templates'
+
 const app = new Hono()
+
+app.use(bodyLimit({ maxSize: 1_000_000 }))
+
+app.route('/templates', templates)
 
 const healthSchema = z.object({ status: z.string() })
 

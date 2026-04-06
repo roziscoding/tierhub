@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-#MISE description="Start the dev server"
+#MISE description="Start frontend and backend dev servers"
 set -euo pipefail
-bun run vite dev
+bun run --filter '@tierhub/frontend' dev & bun run --filter '@tierhub/backend' dev & wait

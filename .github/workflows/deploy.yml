@@ -26,11 +26,11 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - run: bun run build
+      - run: bun run --filter '@tierhub/frontend' build
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: build
+          path: apps/frontend/build
 
   deploy:
     needs: build

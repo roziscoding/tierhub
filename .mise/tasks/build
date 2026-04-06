@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-#MISE description="Build the project for production"
+#MISE description="Build the frontend for production"
 set -euo pipefail
-bun run vite build
+bun run --filter '@tierhub/frontend' build

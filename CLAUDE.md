@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Use mise tasks for development (preferred):**
 
-- `mise dev` — start frontend + backend dev servers
+- `mise dev` — start Postgres (Docker), push schema, start frontend + backend
 - `mise build` — production build (frontend only, outputs to `apps/frontend/build/`)
 - `mise check` — run type checking for all workspaces
 - `mise lint` — run eslint
@@ -14,20 +14,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `mise ok` — run both lint and check (use before committing)
 - `mise preview` — preview frontend production build locally
 
-**Package manager is bun (v1.3.11) with workspaces.** Use `bun add`/`bun remove` with `--filter` for workspace-specific deps.
+**Package manager is bun (v1.3.11) with workspaces.** Install workspace deps from within the workspace dir (`cd apps/backend && bun add ...`).
 
 **Database (backend):**
 
+- `bun run --filter '@tierhub/backend' db:push` — push schema to DB (dev)
 - `bun run --filter '@tierhub/backend' db:generate` — generate Drizzle migrations
 - `bun run --filter '@tierhub/backend' db:migrate` — run Drizzle migrations
+
+**Infrastructure:**
+
+- `docker compose up -d postgres` — start PostgreSQL
 
 ## Architecture
 
 **Monorepo** with Bun workspaces (`apps/*`):
 
-### `apps/frontend` — SvelteKit static app
+### `apps/frontend` — SvelteKit SPA
 
-Static tier list maker built with **SvelteKit 2 + Svelte 5 runes + TypeScript**. Pre-rendered via `adapter-static`, deployed to **GitHub Pages** via GitHub Actions.
+Tier list maker built with **SvelteKit 2 + Svelte 5 runes + TypeScript**. Pre-rendered via `adapter-static`, deployed to **GitHub Pages** via GitHub Actions.
+
+#### Auth
+
+- **Better Auth** Svelte client (`$lib/auth.ts`) provides `authClient` with `useSession()` store
+- Login (`/login`) and signup (`/signup`) pages with email/password
+- Layout (`+layout.svelte`) redirects unauthenticated users to `/login`
+- Public routes: `/login`, `/signup`, `/tierlist` (single-use, no auth required)
+
+#### API client
+
+- `$lib/api.ts` — fetch-based client for the backend API
+- All API calls include `credentials: 'include'` for cookie-based auth
+- `VITE_API_URL` env var configures backend URL (default: `http://localhost:3000`)
+
+#### Key files
+
+- `apps/frontend/src/routes/+page.svelte` — home page with template list
+- `apps/frontend/src/routes/tierlist/+page.svelte` — single-use tier list editor (no auth)
+- `apps/frontend/src/routes/template/+page.svelte` — template creation page
+- `apps/frontend/src/routes/template/[id]/+page.svelte` — play a template
+- `apps/frontend/src/routes/login/+page.svelte` — login page
+- `apps/frontend/src/routes/signup/+page.svelte` — signup page
+- `apps/frontend/src/lib/components/TierlistEditor.svelte` — reusable tier list editor component
+- `apps/frontend/src/lib/components/TierItem.svelte` — reusable tier item component
+- `apps/frontend/src/lib/components/Button.svelte` — reusable button (variants: `primary`, `ghost`, `danger`)
+- `apps/frontend/src/lib/tokens.css` — design tokens (colors, radii) as CSS custom properties on `:root`
+- `apps/frontend/src/lib/auth.ts` — Better Auth Svelte client
+- `apps/frontend/src/lib/api.ts` — backend API client
+- `apps/frontend/src/routes/+layout.svelte` — auth guard, topbar, global styles
 
 #### Deployment
 
@@ -36,36 +70,46 @@ Static tier list maker built with **SvelteKit 2 + Svelte 5 runes + TypeScript**.
 - `adapter-static` uses `fallback: '404.html'` for SPA client-side routing on GitHub Pages
 - Dynamic routes (e.g. `/template/[id]`) have `prerender = false`
 
-#### Key files
-
-- `apps/frontend/src/routes/+page.svelte` — home page with template list and navigation
-- `apps/frontend/src/routes/tierlist/+page.svelte` — single-use tier list editor
-- `apps/frontend/src/routes/template/+page.svelte` — template creation page
-- `apps/frontend/src/routes/template/[id]/+page.svelte` — play a template (loads from IndexedDB)
-- `apps/frontend/src/lib/components/TierlistEditor.svelte` — reusable tier list editor component
-- `apps/frontend/src/lib/components/TierItem.svelte` — reusable tier item component
-- `apps/frontend/src/lib/components/Button.svelte` — reusable button (variants: `primary`, `ghost`, `danger`)
-- `apps/frontend/src/lib/tokens.css` — design tokens (colors, radii) as CSS custom properties on `:root`
-- `apps/frontend/src/lib/db.ts` — IndexedDB persistence for templates
-- `apps/frontend/src/routes/+layout.svelte` — imports tokens, sets global body styles
-
 ### `apps/backend` — Hono API
 
 **Hono + hono-openapi + Zod** for validation and OpenAPI docs. Runs on **Bun**.
 
-- `apps/backend/src/index.ts` — app entry point with health check and Swagger UI
-- `apps/backend/src/db/schema.ts` — Drizzle ORM schema (PostgreSQL)
+#### Auth
+
+- **Better Auth** server (`src/auth.ts`) with Drizzle adapter and email/password
+- Auth routes mounted at `/api/auth/**`
+- `src/middleware/auth.ts` — `requireAuth` middleware extracts session/user from cookie
+- All template routes require authentication; templates are scoped to the authenticated user
+
+#### Key files
+
+- `apps/backend/src/index.ts` — app entry point, CORS, bodyLimit, auth routes, Swagger UI
+- `apps/backend/src/auth.ts` — Better Auth server configuration
+- `apps/backend/src/routes/templates.ts` — template CRUD routes (auth-protected)
+- `apps/backend/src/middleware/auth.ts` — requireAuth middleware
+- `apps/backend/src/db/schema.ts` — Drizzle ORM schema (templates, tiers, items)
+- `apps/backend/src/db/auth-schema.ts` — Better Auth tables (user, session, account, verification)
 - `apps/backend/src/db/index.ts` — database connection
+- `apps/backend/src/types.ts` — shared Hono env types (AuthEnv)
+- `apps/backend/src/validation.ts` — image size validation (1 MB max)
 - `apps/backend/drizzle.config.ts` — Drizzle Kit configuration
 
-**Database:** PostgreSQL via `postgres` driver + Drizzle ORM. Connection string from `DATABASE_URL` env var.
+**Database:** PostgreSQL via `postgres` driver + Drizzle ORM. Connection string from `DATABASE_URL` env var. Docker Compose provides a dev PostgreSQL instance.
+
+**Environment variables (backend):**
+
+- `DATABASE_URL` — PostgreSQL connection string
+- `BETTER_AUTH_SECRET` — secret for session signing (min 32 chars)
 
 ### Data model
 
-- `TierItem` — `{ id, src }` where `src` is a data URL
-- `Tier` — `{ id, label, color, items: TierItem[] }`
+- `Template` — `{ id, userId, title, description, tiers, items, createdAt }`
+- `TemplateTier` — `{ label, color }` — tier definition (label + color)
+- `TemplateItem` — `{ src }` — pool item (data URL image)
+- `TierItem` (runtime) — `{ id, src }` — runtime item with local ID
+- `Tier` (runtime) — `{ id, label, color, items: TierItem[] }`
 
-Runtime state is client-side via `$state()`. Templates are persisted in IndexedDB (frontend) and PostgreSQL (backend).
+Templates stored in PostgreSQL. Runtime editor state is client-side via `$state()`.
 
 ### Drag and drop
 

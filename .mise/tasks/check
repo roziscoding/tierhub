@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Run svelte-check for type checking"
+set -euo pipefail
+bun run svelte-check --tsconfig ./tsconfig.json

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Preview the production build locally"
+set -euo pipefail
+bun run vite preview

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Run eslint on the project"
+set -euo pipefail
+bun run eslint .

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Run eslint with auto-fix"
+set -euo pipefail
+bun run eslint . --fix

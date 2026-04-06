@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Build the project for production"
+set -euo pipefail
+bun run vite build

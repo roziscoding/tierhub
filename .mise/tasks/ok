@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run lint and typecheck"
+#MISE depends=["lint", "check"]
+set -euo pipefail
+echo "All checks passed!"

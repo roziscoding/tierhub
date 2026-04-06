@@ -1,42 +1,43 @@
-# sv
+# TierHub
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A simple, static tier list maker. Upload images, drag them into tiers, reorder everything.
 
-## Creating a project
+## Features
 
-If you're seeing this, you've probably already done this step. Congrats!
+- Drag and drop images between tiers and a shared pool
+- Reorder tiers by dragging the colored label
+- Up to 10 tiers with customizable labels and colors (15-color palette)
+- Lightbox for viewing full-size images
+- Dynamic sizing — tiers and items scale with the number of rows
+- Works on desktop and mobile (touch support via svelte-dnd-action)
+- Fully client-side, no backend or persistence
 
-```sh
-# create a new project
-npx sv create my-app
+## Getting started
+
+Requires [bun](https://bun.sh) and [mise](https://mise.jdx.dev).
+
+```bash
+bun install
+mise dev
 ```
 
-To recreate this project with the same configuration:
+Open [localhost:5175](http://localhost:5175).
 
-```sh
-# recreate this project
-npx sv@0.14.0 create --template minimal --types ts --no-install .
-```
+## Scripts
 
-## Developing
+| Command | Description |
+|---|---|
+| `mise dev` | Start dev server |
+| `mise build` | Production build |
+| `mise lint` | Run eslint |
+| `mise lint:fix` | Auto-fix lint issues |
+| `mise check` | Type check with svelte-check |
+| `mise ok` | Lint + type check |
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Tech stack
 
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+- [Svelte 5](https://svelte.dev) + [SvelteKit](https://svelte.dev/docs/kit)
+- [svelte-dnd-action](https://github.com/isaacHagoel/svelte-dnd-action) for drag and drop
+- [TypeScript](https://www.typescriptlang.org)
+- [@antfu/eslint-config](https://github.com/antfu/eslint-config)
+- [Bun](https://bun.sh) + [Mise](https://mise.jdx.dev)

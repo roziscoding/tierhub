@@ -3,9 +3,9 @@
   import type { DndEvent } from 'svelte-dnd-action'
 
   import { base } from '$app/paths'
+  import { saveTemplate } from '$lib/api'
   import Button from '$lib/components/Button.svelte'
   import TierItemComponent from '$lib/components/TierItem.svelte'
-  import { saveTemplate } from '$lib/db'
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action'
   import { flip } from 'svelte/animate'
 
@@ -137,9 +137,8 @@
         description,
         tiers: tiers.map(t => ({ label: t.label, color: t.color })),
         items: pool.map(i => ({ src: i.src })),
-        createdAt: Date.now(),
       })
-      window.location.href = '/'
+      window.location.href = `${base}/`
     }
     finally {
       saving = false

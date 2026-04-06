@@ -1,18 +1,12 @@
 <script lang='ts'>
-  import type { Template } from '$lib/db'
+  import type { TemplateSummary } from '$lib/api'
 
-  import { dev } from '$app/environment'
   import { base } from '$app/paths'
+  import { listTemplates } from '$lib/api'
   import Button from '$lib/components/Button.svelte'
-  import { clearAll, listTemplates } from '$lib/db'
   import { onMount } from 'svelte'
 
-  let templates: Template[] = $state([])
-
-  async function handleClearData() {
-    await clearAll()
-    templates = []
-  }
+  let templates: TemplateSummary[] = $state([])
 
   function textColor(bg: string): string {
     const hex = bg.replace('#', '')
@@ -77,9 +71,6 @@
     </section>
   {/if}
 
-  {#if dev}
-    <Button variant='danger' confirm='Are you sure?' onclick={handleClearData}>Clear all data</Button>
-  {/if}
 </div>
 
 <style>

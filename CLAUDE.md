@@ -28,10 +28,8 @@ Single-page static tier list maker built with **SvelteKit 2 + Svelte 5 runes + T
 
 ### Data model
 
-```typescript
-interface TierItem { id: number; src: string } // src is a data URL
-interface Tier { id: number; label: string; color: string; items: TierItem[] }
-```
+- `TierItem` — `{ id, src }` where `src` is a data URL
+- `Tier` — `{ id, label, color, items: TierItem[] }`
 
 All state is client-side via `$state()`. No persistence, no backend.
 

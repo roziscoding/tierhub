@@ -17,13 +17,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-Single-page static tier list maker built with **SvelteKit 2 + Svelte 5 runes + TypeScript**. Pre-rendered via `adapter-static`.
+Static tier list maker built with **SvelteKit 2 + Svelte 5 runes + TypeScript**. Pre-rendered via `adapter-static`, deployed to **GitHub Pages** via GitHub Actions.
+
+### Deployment
+
+- GitHub Actions workflow in `.github/workflows/deploy.yml` builds and deploys on push to `main`
+- Base path is `/tierhub` in production (empty in dev) — all internal links must use `{base}` from `$app/paths`
+- `adapter-static` uses `fallback: '404.html'` for SPA client-side routing on GitHub Pages
+- Dynamic routes (e.g. `/template/[id]`) have `prerender = false`
 
 ### Key files
 
-- `src/routes/+page.svelte` — the entire app (tiers, pool, drag-and-drop, lightbox, color picker)
+- `src/routes/+page.svelte` — home page with template list and navigation
+- `src/routes/tierlist/+page.svelte` — single-use tier list editor
+- `src/routes/template/+page.svelte` — template creation page
+- `src/routes/template/[id]/+page.svelte` — play a template (loads from IndexedDB)
+- `src/lib/components/TierlistEditor.svelte` — reusable tier list editor component
+- `src/lib/components/TierItem.svelte` — reusable tier item component
+- `src/lib/components/Button.svelte` — reusable button (variants: `primary`, `ghost`, `danger`)
 - `src/lib/tokens.css` — design tokens (colors, radii) as CSS custom properties on `:root`
-- `src/lib/components/Button.svelte` — reusable button (variants: `primary`, `ghost`)
+- `src/lib/db.ts` — IndexedDB persistence for templates
 - `src/routes/+layout.svelte` — imports tokens, sets global body styles
 
 ### Data model
@@ -31,7 +44,7 @@ Single-page static tier list maker built with **SvelteKit 2 + Svelte 5 runes + T
 - `TierItem` — `{ id, src }` where `src` is a data URL
 - `Tier` — `{ id, label, color, items: TierItem[] }`
 
-All state is client-side via `$state()`. No persistence, no backend.
+Runtime state is client-side via `$state()`. Templates are persisted in IndexedDB (see `src/lib/db.ts`).
 
 ### Drag and drop
 

@@ -10,7 +10,10 @@ A simple, static tier list maker. Upload images, drag them into tiers, reorder e
 - Lightbox for viewing full-size images
 - Dynamic sizing — tiers and items scale with the number of rows
 - Works on desktop and mobile (touch support via svelte-dnd-action)
-- Fully client-side, no backend or persistence
+- Export tier list as image
+- Templates with IndexedDB persistence
+- Fully client-side, no backend
+- Deployed to [GitHub Pages](https://about.rjmunhoz.me/tierhub/)
 
 ## Getting started
 

@@ -1,0 +1,29 @@
+:root {
+  /* Primary */
+  --color-primary: #e8a912;
+  --color-primary-hover: #f0b828;
+  --color-primary-text: #000;
+
+  /* Surfaces */
+  --color-bg: #141414;
+  --color-surface: #1a1a1a;
+  --color-surface-raised: #1c1c1c;
+  --color-surface-hover: #252525;
+
+  /* Borders */
+  --color-border: #2a2a2a;
+  --color-border-hover: #444;
+
+  /* Text */
+  --color-text: #eee;
+  --color-text-muted: #999;
+  --color-text-faint: #555;
+
+  /* Danger */
+  --color-danger: #ff4444;
+
+  /* Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+}

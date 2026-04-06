@@ -1,6 +1,6 @@
 import type { AuthEnv } from '../types'
 
-import { and, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute } from 'hono-openapi'
 import { resolver, validator as zValidator } from 'hono-openapi/zod'
@@ -11,20 +11,28 @@ import * as schema from '../db/schema'
 import { requireAuth } from '../middleware/auth'
 import { MAX_IMAGE_SIZE } from '../validation'
 
+const DATA_URI_REGEX = /^data:image\/(png|jpeg|gif|webp|svg\+xml);base64,/
+
 const templateItemInput = z.object({
-  src: z.string().max(MAX_IMAGE_SIZE, 'Image must not exceed 1 MB'),
+  src: z.string()
+    .max(MAX_IMAGE_SIZE, 'Image must not exceed 1 MB')
+    .regex(DATA_URI_REGEX, 'Image must be a valid data URI'),
 })
 
 const templateTierInput = z.object({
-  label: z.string().min(1),
-  color: z.string().min(1),
+  label: z.string().min(1).max(50),
+  color: z.string().regex(/^#[\dA-F]{6}$/i, 'Color must be a valid hex color'),
 })
 
 const createTemplateBody = z.object({
-  title: z.string().min(1),
-  description: z.string().default(''),
-  tiers: z.array(templateTierInput),
-  items: z.array(templateItemInput),
+  title: z.string().min(1).max(200),
+  description: z.string().max(1000).default(''),
+  tiers: z.array(templateTierInput).min(1).max(10),
+  items: z.array(templateItemInput).min(1).max(100),
+})
+
+const uuidParam = z.object({
+  id: z.string().uuid(),
 })
 
 const templateTierResponse = z.object({
@@ -62,14 +70,14 @@ app.post(
     const body = c.req.valid('json')
     const user = c.get('user')
 
-    const [template] = await db.insert(schema.templates).values({
-      userId: user.id,
-      title: body.title,
-      description: body.description,
-    }).returning()
+    const result = await db.transaction(async (tx) => {
+      const [template] = await tx.insert(schema.templates).values({
+        userId: user.id,
+        title: body.title,
+        description: body.description,
+      }).returning()
 
-    if (body.tiers.length > 0) {
-      await db.insert(schema.templateTiers).values(
+      await tx.insert(schema.templateTiers).values(
         body.tiers.map((t, i) => ({
           templateId: template.id,
           label: t.label,
@@ -77,25 +85,25 @@ app.post(
           position: i,
         })),
       )
-    }
 
-    if (body.items.length > 0) {
-      await db.insert(schema.templateItems).values(
+      await tx.insert(schema.templateItems).values(
         body.items.map((item, i) => ({
           templateId: template.id,
           src: item.src,
           position: i,
         })),
       )
-    }
+
+      return template
+    })
 
     return c.json({
-      id: template.id,
-      title: template.title,
-      description: template.description,
+      id: result.id,
+      title: result.title,
+      description: result.description,
       tiers: body.tiers,
       items: body.items,
-      createdAt: template.createdAt.toISOString(),
+      createdAt: result.createdAt.toISOString(),
     }, 201)
   },
 )
@@ -123,24 +131,24 @@ app.get(
   }),
   async (c) => {
     const user = c.get('user')
-    const templates = await db.select().from(schema.templates).where(eq(schema.templates.userId, user.id))
 
-    const result = await Promise.all(templates.map(async (t) => {
-      const tiers = await db.select({
-        label: schema.templateTiers.label,
-        color: schema.templateTiers.color,
-      }).from(schema.templateTiers).where(eq(schema.templateTiers.templateId, t.id)).orderBy(schema.templateTiers.position)
+    const templates = await db.query.templates.findMany({
+      where: eq(schema.templates.userId, user.id),
+      with: {
+        tiers: {
+          columns: { label: true, color: true },
+          orderBy: asc(schema.templateTiers.position),
+        },
+      },
+    })
 
-      return {
-        id: t.id,
-        title: t.title,
-        description: t.description,
-        tiers,
-        createdAt: t.createdAt.toISOString(),
-      }
-    }))
-
-    return c.json(result)
+    return c.json(templates.map(t => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      tiers: t.tiers,
+      createdAt: t.createdAt.toISOString(),
+    })))
   },
 )
 
@@ -153,32 +161,34 @@ app.get(
       404: { description: 'Not found' },
     },
   }),
+  zValidator('param', uuidParam),
   async (c) => {
-    const { id } = c.req.param()
+    const { id } = c.req.valid('param')
     const user = c.get('user')
 
     const template = await db.query.templates.findFirst({
       where: and(eq(schema.templates.id, id), eq(schema.templates.userId, user.id)),
+      with: {
+        tiers: {
+          columns: { label: true, color: true },
+          orderBy: asc(schema.templateTiers.position),
+        },
+        items: {
+          columns: { src: true },
+          orderBy: asc(schema.templateItems.position),
+        },
+      },
     })
 
     if (!template)
       return c.json({ error: 'Template not found' }, 404)
 
-    const tiers = await db.select({
-      label: schema.templateTiers.label,
-      color: schema.templateTiers.color,
-    }).from(schema.templateTiers).where(eq(schema.templateTiers.templateId, id)).orderBy(schema.templateTiers.position)
-
-    const items = await db.select({
-      src: schema.templateItems.src,
-    }).from(schema.templateItems).where(eq(schema.templateItems.templateId, id)).orderBy(schema.templateItems.position)
-
     return c.json({
       id: template.id,
       title: template.title,
       description: template.description,
-      tiers,
-      items,
+      tiers: template.tiers,
+      items: template.items,
       createdAt: template.createdAt.toISOString(),
     })
   },
@@ -193,8 +203,9 @@ app.delete(
       404: { description: 'Not found' },
     },
   }),
+  zValidator('param', uuidParam),
   async (c) => {
-    const { id } = c.req.param()
+    const { id } = c.req.valid('param')
     const user = c.get('user')
 
     const [deleted] = await db.delete(schema.templates)

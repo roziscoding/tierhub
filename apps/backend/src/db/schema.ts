@@ -1,3 +1,4 @@
+import { relations } from 'drizzle-orm'
 import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 
 import { user } from './auth-schema'
@@ -25,3 +26,16 @@ export const templateItems = pgTable('template_items', {
   src: text('src').notNull(),
   position: integer('position').notNull(),
 })
+
+export const templatesRelations = relations(templates, ({ many }) => ({
+  tiers: many(templateTiers),
+  items: many(templateItems),
+}))
+
+export const templateTiersRelations = relations(templateTiers, ({ one }) => ({
+  template: one(templates, { fields: [templateTiers.templateId], references: [templates.id] }),
+}))
+
+export const templateItemsRelations = relations(templateItems, ({ one }) => ({
+  template: one(templates, { fields: [templateItems.templateId], references: [templates.id] }),
+}))

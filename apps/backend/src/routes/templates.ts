@@ -8,37 +8,38 @@ import { db } from '../db'
 import * as schema from '../db/schema'
 import { MAX_IMAGE_SIZE } from '../validation'
 
-const tierItemInput = z.object({
+const templateItemInput = z.object({
   src: z.string().max(MAX_IMAGE_SIZE, 'Image must not exceed 1 MB'),
 })
 
-const tierInput = z.object({
+const templateTierInput = z.object({
   label: z.string().min(1),
   color: z.string().min(1),
-  position: z.string(),
-  items: z.array(tierItemInput),
 })
 
 const createTemplateBody = z.object({
-  name: z.string().min(1),
-  tiers: z.array(tierInput),
+  title: z.string().min(1),
+  description: z.string().default(''),
+  tiers: z.array(templateTierInput),
+  items: z.array(templateItemInput),
+})
+
+const templateTierResponse = z.object({
+  label: z.string(),
+  color: z.string(),
+})
+
+const templateItemResponse = z.object({
+  src: z.string(),
 })
 
 const templateResponse = z.object({
   id: z.string().uuid(),
-  name: z.string(),
+  title: z.string(),
+  description: z.string(),
+  tiers: z.array(templateTierResponse),
+  items: z.array(templateItemResponse),
   createdAt: z.string(),
-  updatedAt: z.string(),
-  tiers: z.array(z.object({
-    id: z.string().uuid(),
-    label: z.string(),
-    color: z.string(),
-    position: z.string(),
-    items: z.array(z.object({
-      id: z.string().uuid(),
-      src: z.string(),
-    })),
-  })),
 })
 
 const app = new Hono()
@@ -55,31 +56,39 @@ app.post(
   async (c) => {
     const body = c.req.valid('json')
 
-    const [template] = await db.insert(schema.templates).values({ name: body.name }).returning()
+    const [template] = await db.insert(schema.templates).values({
+      title: body.title,
+      description: body.description,
+    }).returning()
 
-    const tiersWithItems = []
-    for (const tierInput of body.tiers) {
-      const [tier] = await db.insert(schema.tiers).values({
-        templateId: template.id,
-        label: tierInput.label,
-        color: tierInput.color,
-        position: tierInput.position,
-      }).returning()
+    if (body.tiers.length > 0) {
+      await db.insert(schema.templateTiers).values(
+        body.tiers.map((t, i) => ({
+          templateId: template.id,
+          label: t.label,
+          color: t.color,
+          position: i,
+        })),
+      )
+    }
 
-      const items = tierInput.items.length > 0
-        ? await db.insert(schema.tierItems).values(
-            tierInput.items.map(item => ({ tierId: tier.id, src: item.src })),
-          ).returning()
-        : []
-
-      tiersWithItems.push({ ...tier, items })
+    if (body.items.length > 0) {
+      await db.insert(schema.templateItems).values(
+        body.items.map((item, i) => ({
+          templateId: template.id,
+          src: item.src,
+          position: i,
+        })),
+      )
     }
 
     return c.json({
-      ...template,
+      id: template.id,
+      title: template.title,
+      description: template.description,
+      tiers: body.tiers,
+      items: body.items,
       createdAt: template.createdAt.toISOString(),
-      updatedAt: template.updatedAt.toISOString(),
-      tiers: tiersWithItems,
     }, 201)
   },
 )
@@ -89,22 +98,41 @@ app.get(
   describeRoute({
     description: 'List all templates',
     responses: {
-      200: { description: 'OK', content: { 'application/json': { schema: resolver(z.array(z.object({ id: z.string().uuid(), name: z.string(), createdAt: z.string(), updatedAt: z.string() }))) } } },
+      200: {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: resolver(z.array(z.object({
+              id: z.string().uuid(),
+              title: z.string(),
+              description: z.string(),
+              tiers: z.array(templateTierResponse),
+              createdAt: z.string(),
+            }))),
+          },
+        },
+      },
     },
   }),
   async (c) => {
-    const templates = await db.select({
-      id: schema.templates.id,
-      name: schema.templates.name,
-      createdAt: schema.templates.createdAt,
-      updatedAt: schema.templates.updatedAt,
-    }).from(schema.templates)
+    const templates = await db.select().from(schema.templates)
 
-    return c.json(templates.map(t => ({
-      ...t,
-      createdAt: t.createdAt.toISOString(),
-      updatedAt: t.updatedAt.toISOString(),
-    })))
+    const result = await Promise.all(templates.map(async (t) => {
+      const tiers = await db.select({
+        label: schema.templateTiers.label,
+        color: schema.templateTiers.color,
+      }).from(schema.templateTiers).where(eq(schema.templateTiers.templateId, t.id)).orderBy(schema.templateTiers.position)
+
+      return {
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        tiers,
+        createdAt: t.createdAt.toISOString(),
+      }
+    }))
+
+    return c.json(result)
   },
 )
 
@@ -127,18 +155,22 @@ app.get(
     if (!template)
       return c.json({ error: 'Template not found' }, 404)
 
-    const tiers = await db.select().from(schema.tiers).where(eq(schema.tiers.templateId, id))
+    const tiers = await db.select({
+      label: schema.templateTiers.label,
+      color: schema.templateTiers.color,
+    }).from(schema.templateTiers).where(eq(schema.templateTiers.templateId, id)).orderBy(schema.templateTiers.position)
 
-    const tiersWithItems = await Promise.all(tiers.map(async (tier) => {
-      const items = await db.select().from(schema.tierItems).where(eq(schema.tierItems.tierId, tier.id))
-      return { ...tier, items }
-    }))
+    const items = await db.select({
+      src: schema.templateItems.src,
+    }).from(schema.templateItems).where(eq(schema.templateItems.templateId, id)).orderBy(schema.templateItems.position)
 
     return c.json({
-      ...template,
+      id: template.id,
+      title: template.title,
+      description: template.description,
+      tiers,
+      items,
       createdAt: template.createdAt.toISOString(),
-      updatedAt: template.updatedAt.toISOString(),
-      tiers: tiersWithItems,
     })
   },
 )
@@ -155,7 +187,9 @@ app.delete(
   async (c) => {
     const { id } = c.req.param()
 
-    const [deleted] = await db.delete(schema.templates).where(eq(schema.templates.id, id)).returning()
+    const [deleted] = await db.delete(schema.templates)
+      .where(eq(schema.templates.id, id))
+      .returning()
 
     if (!deleted)
       return c.json({ error: 'Template not found' }, 404)

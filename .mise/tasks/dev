@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
-#MISE description="Start frontend and backend dev servers"
+#MISE description="Start Postgres, backend, and frontend dev servers"
 set -euo pipefail
+docker compose up -d postgres
+bun run --filter '@tierhub/backend' db:push
 bun run --filter '@tierhub/frontend' dev & bun run --filter '@tierhub/backend' dev & wait

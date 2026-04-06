@@ -6,6 +6,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
 
+import { auth } from './auth'
 import templates from './routes/templates'
 
 const app = new Hono()
@@ -15,6 +16,10 @@ app.use(cors({
   credentials: true,
 }))
 app.use(bodyLimit({ maxSize: 50_000_000 }))
+
+app.on(['POST', 'GET'], '/api/auth/**', (c) => {
+  return auth.handler(c.req.raw)
+})
 
 app.route('/templates', templates)
 

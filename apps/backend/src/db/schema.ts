@@ -1,7 +1,10 @@
 import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 
+import { user } from './auth-schema'
+
 export const templates = pgTable('templates', {
   id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   description: text('description').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

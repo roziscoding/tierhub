@@ -1,4 +1,6 @@
-import { eq } from 'drizzle-orm'
+import type { AuthEnv } from '../types'
+
+import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute } from 'hono-openapi'
 import { resolver, validator as zValidator } from 'hono-openapi/zod'
@@ -6,6 +8,7 @@ import { z } from 'zod'
 
 import { db } from '../db'
 import * as schema from '../db/schema'
+import { requireAuth } from '../middleware/auth'
 import { MAX_IMAGE_SIZE } from '../validation'
 
 const templateItemInput = z.object({
@@ -42,7 +45,9 @@ const templateResponse = z.object({
   createdAt: z.string(),
 })
 
-const app = new Hono()
+const app = new Hono<AuthEnv>()
+
+app.use(requireAuth)
 
 app.post(
   '/',
@@ -55,8 +60,10 @@ app.post(
   zValidator('json', createTemplateBody),
   async (c) => {
     const body = c.req.valid('json')
+    const user = c.get('user')
 
     const [template] = await db.insert(schema.templates).values({
+      userId: user.id,
       title: body.title,
       description: body.description,
     }).returning()
@@ -96,7 +103,7 @@ app.post(
 app.get(
   '/',
   describeRoute({
-    description: 'List all templates',
+    description: 'List current user templates',
     responses: {
       200: {
         description: 'OK',
@@ -115,7 +122,8 @@ app.get(
     },
   }),
   async (c) => {
-    const templates = await db.select().from(schema.templates)
+    const user = c.get('user')
+    const templates = await db.select().from(schema.templates).where(eq(schema.templates.userId, user.id))
 
     const result = await Promise.all(templates.map(async (t) => {
       const tiers = await db.select({
@@ -147,9 +155,10 @@ app.get(
   }),
   async (c) => {
     const { id } = c.req.param()
+    const user = c.get('user')
 
     const template = await db.query.templates.findFirst({
-      where: eq(schema.templates.id, id),
+      where: and(eq(schema.templates.id, id), eq(schema.templates.userId, user.id)),
     })
 
     if (!template)
@@ -186,9 +195,10 @@ app.delete(
   }),
   async (c) => {
     const { id } = c.req.param()
+    const user = c.get('user')
 
     const [deleted] = await db.delete(schema.templates)
-      .where(eq(schema.templates.id, id))
+      .where(and(eq(schema.templates.id, id), eq(schema.templates.userId, user.id)))
       .returning()
 
     if (!deleted)

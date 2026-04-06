@@ -11,6 +11,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
+    "better-auth": "^1.5.6",
     "html-to-image": "^1.11.13",
     "svelte-dnd-action": "^0.9.69"
   },

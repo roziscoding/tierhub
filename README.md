@@ -2,6 +2,8 @@
 
 A simple, static tier list maker. Upload images, drag them into tiers, reorder everything.
 
+**https://about.rjmunhoz.me/tierhub/**
+
 ## Features
 
 - Drag and drop images between tiers and a shared pool
@@ -24,7 +26,7 @@ bun install
 mise dev
 ```
 
-Open [localhost:5175](http://localhost:5175).
+Open [localhost:5173](http://localhost:5173).
 
 ## Scripts
 

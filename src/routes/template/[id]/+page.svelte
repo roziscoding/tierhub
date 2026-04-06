@@ -2,7 +2,9 @@
   import type { DndEvent } from 'svelte-dnd-action'
 
   import { page } from '$app/stores'
+  import Button from '$lib/components/Button.svelte'
   import { getTemplate } from '$lib/db'
+  import { exportTierlistAsImage } from '$lib/export'
   import { onMount } from 'svelte'
   import { dndzone } from 'svelte-dnd-action'
   import { flip } from 'svelte/animate'
@@ -28,6 +30,20 @@
   let pool: TierItem[] = $state([])
   let loading = $state(true)
   let lightboxSrc = $state<string | null>(null)
+  let tierlistEl = $state<HTMLElement | null>(null)
+  let exporting = $state(false)
+
+  async function exportImage() {
+    if (!tierlistEl)
+      return
+    exporting = true
+    try {
+      await exportTierlistAsImage(tierlistEl, `${title || 'tierlist'}.png`)
+    }
+    finally {
+      exporting = false
+    }
+  }
 
   onMount(async () => {
     const id = Number($page.params.id)
@@ -66,11 +82,6 @@
 
   function handlePoolFinalize(e: CustomEvent<DndEvent<TierItem>>) {
     pool = e.detail.items
-  }
-
-  function removeItemFromTier(tierIndex: number, itemIndex: number) {
-    const [item] = tiers[tierIndex].items.splice(itemIndex, 1)
-    pool.push(item)
   }
 
   function textColor(bg: string): string {
@@ -113,7 +124,7 @@
       {/if}
     </header>
 
-    <div class='tierlist'>
+    <div class='tierlist' bind:this={tierlistEl}>
       {#each tiers as tier, i (tier.id)}
         <div class='tier-row'>
           <div class='tier-label-wrapper' style='background: {tier.color}; color: {textColor(tier.color)}'>
@@ -130,7 +141,6 @@
                 <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
                   <img src={item.src} alt='' class='item-img' />
                 </button>
-                <button class='item-remove' onclick={() => removeItemFromTier(i, tier.items.indexOf(item))}>&times;</button>
               </div>
             {/each}
           </div>
@@ -139,25 +149,29 @@
     </div>
 
     <div class='pool-section'>
-      <div class='pool-wrapper' class:pool-empty={pool.length === 0}>
+      <div
+        class='pool'
+        class:pool-empty={pool.length === 0}
+        role='list'
+        use:dndzone={{ items: pool, flipDurationMs: FLIP_MS, type: ZONE_TYPE }}
+        onconsider={handlePoolConsider}
+        onfinalize={handlePoolFinalize}
+      >
         {#if pool.length === 0}
-          <div class='pool-done'>All items placed!</div>
+          <div class='pool-done'>
+            <span>All items placed!</span>
+            <Button onclick={exportImage} disabled={exporting}>
+              {exporting ? 'Exporting...' : 'Export as Image'}
+            </Button>
+          </div>
         {/if}
-        <div
-          class='pool'
-          role='list'
-          use:dndzone={{ items: pool, flipDurationMs: FLIP_MS, type: ZONE_TYPE }}
-          onconsider={handlePoolConsider}
-          onfinalize={handlePoolFinalize}
-        >
-          {#each pool as item (item.id)}
-            <div class='item' animate:flip={{ duration: FLIP_MS }}>
-              <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
-                <img src={item.src} alt='' class='item-img' />
-              </button>
-            </div>
-          {/each}
-        </div>
+        {#each pool as item (item.id)}
+          <div class='item' animate:flip={{ duration: FLIP_MS }}>
+            <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
+              <img src={item.src} alt='' class='item-img' />
+            </button>
+          </div>
+        {/each}
       </div>
     </div>
   </div>
@@ -297,35 +311,7 @@
     border-radius: var(--radius-sm);
   }
 
-  .item-remove {
-    position: absolute;
-    top: -0.375rem;
-    right: -0.375rem;
-    background: rgba(0,0,0,0.7);
-    border: none;
-    color: #fff;
-    cursor: pointer;
-    font-size: 0.8rem;
-    width: 1.125rem;
-    height: 1.125rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-    opacity: 0;
-    transition: opacity 0.15s;
-  }
-
-  .item:hover .item-remove {
-    opacity: 1;
-  }
-
-  .item-remove:hover {
-    background: var(--color-danger);
-  }
-
-  .pool-wrapper {
+  .pool {
     position: relative;
     min-height: var(--item-size);
     background: var(--color-surface);
@@ -341,24 +327,25 @@
     box-shadow: inset 0 0.125rem 0.5rem rgba(0, 0, 0, 0.4);
   }
 
-  .pool-wrapper:hover {
+  .pool:hover {
     border-color: var(--color-border-hover);
   }
 
-  .pool-wrapper.pool-empty {
+  .pool.pool-empty {
     min-height: 3.5rem;
     align-items: center;
     justify-content: center;
   }
 
-  .pool {
-    display: contents;
-  }
-
   .pool-done {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
     color: var(--color-text-faint);
     font-size: 0.9rem;
-    padding: 0.5rem;
+    padding: 1.5rem 0.5rem;
   }
 
   .lightbox {

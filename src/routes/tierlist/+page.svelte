@@ -1,6 +1,7 @@
 <script lang='ts'>
   import type { DndEvent } from 'svelte-dnd-action'
   import Button from '$lib/components/Button.svelte'
+  import { exportTierlistAsImage } from '$lib/export'
   import { dndzone, dragHandle, dragHandleZone } from 'svelte-dnd-action'
   import { flip } from 'svelte/animate'
 
@@ -53,6 +54,22 @@
   let colorPickerTier = $state<number | null>(null)
   let lightboxSrc = $state<string | null>(null)
   let fileInput = $state<HTMLInputElement | null>(null)
+  let tierlistEl = $state<HTMLElement | null>(null)
+  let exporting = $state(false)
+  const totalItems = $derived(tiers.reduce((sum, t) => sum + t.items.length, 0))
+  const allPlaced = $derived(pool.length === 0 && totalItems > 0)
+
+  async function exportImage() {
+    if (!tierlistEl)
+      return
+    exporting = true
+    try {
+      await exportTierlistAsImage(tierlistEl)
+    }
+    finally {
+      exporting = false
+    }
+  }
 
   function toggleColorPicker(index: number) {
     colorPickerTier = colorPickerTier === index ? null : index
@@ -135,10 +152,6 @@
     pool.splice(index, 1)
   }
 
-  function removeItemFromTier(tierIndex: number, itemIndex: number) {
-    tiers[tierIndex].items.splice(itemIndex, 1)
-  }
-
   function textColor(bg: string): string {
     const hex = bg.replace('#', '')
     const r = Number.parseInt(hex.substring(0, 2), 16)
@@ -201,6 +214,7 @@
 
   <div
     class='tierlist'
+    bind:this={tierlistEl}
     use:dragHandleZone={{ items: tiers, flipDurationMs: FLIP_MS, type: TIER_ZONE_TYPE }}
     onconsider={handleTierRowConsider}
     onfinalize={handleTierRowFinalize}
@@ -258,7 +272,6 @@
               <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
                 <img src={item.src} alt='' class='item-img' />
               </button>
-              <button class='item-remove' onclick={() => removeItemFromTier(i, tier.items.indexOf(item))}>&times;</button>
             </div>
           {/each}
         </div>
@@ -281,34 +294,42 @@
       onchange={handleFiles}
       hidden
     />
-    <div class='pool-wrapper' class:pool-empty={pool.length === 0}>
-      <button class='pool-empty-state' style:display={pool.length === 0 ? 'flex' : 'none'} onclick={() => fileInput?.click()}>
-        <svg class='upload-icon' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'>
-          <path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' />
-          <polyline points='17 8 12 3 7 8' />
-          <line x1='12' y1='3' x2='12' y2='15' />
-        </svg>
-        <span class='pool-empty-title'>Drop images here or click to upload</span>
-        <span class='pool-empty-hint'>Supports JPG, PNG, GIF, WebP</span>
-      </button>
-      <div
-        class='pool'
-        role='list'
-        use:dndzone={{ items: pool, flipDurationMs: FLIP_MS, type: ZONE_TYPE }}
-        onconsider={handlePoolConsider}
-        onfinalize={handlePoolFinalize}
-        ondragover={e => e.preventDefault()}
-        ondrop={handleNativeFileDrop}
-      >
-        {#each pool as item (item.id)}
-          <div class='item' animate:flip={{ duration: FLIP_MS }}>
-            <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
-              <img src={item.src} alt='' class='item-img' />
-            </button>
-            <button class='item-remove' onclick={() => removeItemFromPool(pool.indexOf(item))}>&times;</button>
-          </div>
-        {/each}
-      </div>
+    <div
+      class='pool'
+      class:pool-empty={pool.length === 0}
+      role='list'
+      use:dndzone={{ items: pool, flipDurationMs: FLIP_MS, type: ZONE_TYPE }}
+      onconsider={handlePoolConsider}
+      onfinalize={handlePoolFinalize}
+      ondragover={e => e.preventDefault()}
+      ondrop={handleNativeFileDrop}
+    >
+      {#if allPlaced}
+        <div class='pool-done'>
+          <span>All items placed!</span>
+          <Button onclick={exportImage} disabled={exporting}>
+            {exporting ? 'Exporting...' : 'Export as Image'}
+          </Button>
+        </div>
+      {:else if pool.length === 0}
+        <button class='pool-empty-state' onclick={() => fileInput?.click()}>
+          <svg class='upload-icon' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'>
+            <path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' />
+            <polyline points='17 8 12 3 7 8' />
+            <line x1='12' y1='3' x2='12' y2='15' />
+          </svg>
+          <span class='pool-empty-title'>Drop images here or click to upload</span>
+          <span class='pool-empty-hint'>Supports JPG, PNG, GIF, WebP</span>
+        </button>
+      {/if}
+      {#each pool as item (item.id)}
+        <div class='item' animate:flip={{ duration: FLIP_MS }}>
+          <button class='item-img-btn' onclick={() => openLightbox(item.src)}>
+            <img src={item.src} alt='' class='item-img' />
+          </button>
+          <button class='item-remove' onclick={() => removeItemFromPool(pool.indexOf(item))}>&times;</button>
+        </div>
+      {/each}
       {#if pool.length > 0}
         <button class='pool-add-btn' onclick={() => fileInput?.click()} title='Add more images'>+</button>
       {/if}
@@ -572,7 +593,7 @@
     background: var(--color-danger);
   }
 
-  .pool-wrapper {
+  .pool {
     position: relative;
     min-height: var(--item-size);
     background: var(--color-surface);
@@ -588,16 +609,25 @@
     box-shadow: inset 0 0.125rem 0.5rem rgba(0, 0, 0, 0.4);
   }
 
-  .pool-wrapper:hover {
+  .pool:hover {
     border-color: var(--color-border-hover);
   }
 
-  .pool-wrapper.pool-empty {
+  .pool.pool-empty {
     min-height: 11.25rem;
   }
 
-  .pool {
-    display: contents;
+  .pool-done {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    color: var(--color-text-faint);
+    font-size: 0.9rem;
+    padding: 0.5rem;
   }
 
   .pool-empty-state {

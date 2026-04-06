@@ -12,6 +12,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
   },
   "dependencies": {
+    "html-to-image": "^1.11.13",
     "svelte-dnd-action": "^0.9.69"
   },
   "devDependencies": {

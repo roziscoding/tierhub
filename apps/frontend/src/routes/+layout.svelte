@@ -10,9 +10,9 @@
 
   const publicPaths = [`${base}/login`, `${base}/signup`, `${base}/tierlist`]
 
+  const isPublic = $derived(publicPaths.some(p => $page.url.pathname === p || $page.url.pathname === `${p}/`))
+
   $effect(() => {
-    const path = $page.url.pathname
-    const isPublic = publicPaths.some(p => path === p || path === `${p}/`)
     if (!$session.isPending && !$session.data && !isPublic) {
       window.location.href = `${base}/login`
     }
@@ -28,17 +28,21 @@
   <title>TierHub - Tier List Maker</title>
 </svelte:head>
 
-{#if $session.data}
-  <nav class='topbar'>
-    <a href='{base}/' class='brand'>TierHub</a>
-    <div class='user'>
-      <span class='username'>{$session.data.user.name}</span>
-      <button class='logout' onclick={handleLogout}>Log out</button>
-    </div>
-  </nav>
-{/if}
+{#if $session.isPending && !isPublic}
+  <div class='loading'>Loading...</div>
+{:else}
+  {#if $session.data}
+    <nav class='topbar'>
+      <a href='{base}/' class='brand'>TierHub</a>
+      <div class='user'>
+        <span class='username'>{$session.data.user.name}</span>
+        <button class='logout' onclick={handleLogout}>Log out</button>
+      </div>
+    </nav>
+  {/if}
 
-{@render children()}
+  {@render children()}
+{/if}
 
 <style>
   :global(body) {
@@ -98,5 +102,14 @@
   .logout:hover {
     color: var(--color-danger);
     border-color: var(--color-danger);
+  }
+
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    color: var(--color-text-muted);
+    font-size: 1.1rem;
   }
 </style>

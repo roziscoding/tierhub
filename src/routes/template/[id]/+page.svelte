@@ -1,6 +1,7 @@
 <script lang='ts'>
   import type { Tier, TierItem } from '$lib/types'
 
+  import { base } from '$app/paths'
   import { page } from '$app/stores'
   import TierlistEditor from '$lib/components/TierlistEditor.svelte'
   import { getTemplate } from '$lib/db'
@@ -41,7 +42,7 @@
 {:else}
   <div class='app'>
     <header>
-      <a href='/' class='back'>&larr; Back</a>
+      <a href='{base}/' class='back'>&larr; Back</a>
       <h1>{title}</h1>
       {#if description}
         <p class='subtitle'>{description}</p>

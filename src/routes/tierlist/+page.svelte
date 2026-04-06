@@ -1,6 +1,7 @@
 <script lang='ts'>
   import type { Tier, TierItem } from '$lib/types'
 
+  import { base } from '$app/paths'
   import TierlistEditor from '$lib/components/TierlistEditor.svelte'
 
   let tiers: Tier[] = $state([
@@ -15,7 +16,7 @@
 
 <div class='app'>
   <header>
-    <a href='/' class='back'>&larr; Back</a>
+    <a href='{base}/' class='back'>&larr; Back</a>
     <h1>TierHub</h1>
     <p class='subtitle'>Drag and drop images into tiers</p>
   </header>

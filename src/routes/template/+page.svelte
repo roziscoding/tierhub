@@ -2,6 +2,7 @@
   import type { Tier, TierItem } from '$lib/types'
   import type { DndEvent } from 'svelte-dnd-action'
 
+  import { base } from '$app/paths'
   import Button from '$lib/components/Button.svelte'
   import TierItemComponent from '$lib/components/TierItem.svelte'
   import { saveTemplate } from '$lib/db'
@@ -154,7 +155,7 @@
 
 <div class='app'>
   <header>
-    <a href='/' class='back'>&larr; Back</a>
+    <a href='{base}/' class='back'>&larr; Back</a>
     <h1>Create Template</h1>
     <p class='subtitle'>Set up tiers and add images to the pool</p>
   </header>

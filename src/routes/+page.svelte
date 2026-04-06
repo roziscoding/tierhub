@@ -2,6 +2,7 @@
   import type { Template } from '$lib/db'
 
   import { dev } from '$app/environment'
+  import { base } from '$app/paths'
   import Button from '$lib/components/Button.svelte'
   import { clearAll, listTemplates } from '$lib/db'
   import { onMount } from 'svelte'
@@ -34,7 +35,7 @@
   </header>
 
   <div class='actions'>
-    <a href='/tierlist' class='card'>
+    <a href='{base}/tierlist' class='card'>
       <h2>Single Use Tier List</h2>
       <p>Create a tier list from scratch. Add images, drag them into tiers, and rank away.</p>
       <span class='cta'>
@@ -42,7 +43,7 @@
       </span>
     </a>
 
-    <a href='/template' class='card'>
+    <a href='{base}/template' class='card'>
       <h2>Create Template</h2>
       <p>Set up tiers and a pool of images that others can use as a starting point.</p>
       <span class='cta'>
@@ -57,7 +58,7 @@
       <ul class='template-list'>
         {#each templates as template (template.id)}
           <li>
-            <a href='/template/{template.id}' class='template-card'>
+            <a href='{base}/template/{template.id}' class='template-card'>
               <span class='template-title'>{template.title}</span>
               {#if template.description}
                 <span class='template-desc'>{template.description}</span>

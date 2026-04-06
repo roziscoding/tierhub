@@ -17,6 +17,7 @@
     "drizzle-orm": "^0.40",
     "hono": "^4",
     "hono-openapi": "^0.4",
+    "hono-rate-limiter": "^0.5.3",
     "postgres": "^3",
     "zod": "^3"
   },

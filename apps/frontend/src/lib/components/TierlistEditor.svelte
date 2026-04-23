@@ -88,6 +88,8 @@
     tiers.splice(index, 1)
   }
 
+  const MAX_IMAGE_SIZE = 1_000_000
+
   function processFiles(files: FileList) {
     let maxId = 0
     for (const t of tiers) {
@@ -101,9 +103,14 @@
         maxId = item.id
     }
     let nextId = maxId + 1
+    const skipped: string[] = []
     for (const file of files) {
       if (!file.type.startsWith('image/'))
         continue
+      if (file.size > MAX_IMAGE_SIZE) {
+        skipped.push(file.name)
+        continue
+      }
       const reader = new FileReader()
       const id = nextId++
       reader.onload = () => {
@@ -111,6 +118,9 @@
       }
       reader.readAsDataURL(file)
     }
+    if (skipped.length > 0)
+      // eslint-disable-next-line no-alert
+      alert(`Images exceeding 1 MB were skipped: ${skipped.join(', ')}`)
   }
 
   function handleFiles(e: Event) {

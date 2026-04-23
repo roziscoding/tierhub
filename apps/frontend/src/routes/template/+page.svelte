@@ -3,9 +3,9 @@
   import type { DndEvent } from 'svelte-dnd-action'
 
   import { base } from '$app/paths'
+  import { saveTemplate } from '$lib/api'
   import Button from '$lib/components/Button.svelte'
   import TierItemComponent from '$lib/components/TierItem.svelte'
-  import { saveTemplate } from '$lib/db'
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action'
   import { flip } from 'svelte/animate'
 
@@ -43,6 +43,7 @@
   let title = $state('')
   let description = $state('')
   let saving = $state(false)
+  let saveError = $state('')
   let colorPickerTier = $state<number | null>(null)
   let lightboxSrc = $state<string | null>(null)
   let fileInput = $state<HTMLInputElement | null>(null)
@@ -67,16 +68,26 @@
     tiers.splice(index, 1)
   }
 
+  const MAX_IMAGE_SIZE = 1_000_000
+
   function processFiles(files: FileList) {
+    const skipped: string[] = []
     for (const file of files) {
       if (!file.type.startsWith('image/'))
         continue
+      if (file.size > MAX_IMAGE_SIZE) {
+        skipped.push(file.name)
+        continue
+      }
       const reader = new FileReader()
       reader.onload = () => {
         pool.push({ id: nextId++, src: reader.result as string })
       }
       reader.readAsDataURL(file)
     }
+    if (skipped.length > 0)
+      // eslint-disable-next-line no-alert
+      alert(`Images exceeding 1 MB were skipped: ${skipped.join(', ')}`)
   }
 
   function handleFiles(e: Event) {
@@ -121,15 +132,18 @@
 
   async function save() {
     saving = true
+    saveError = ''
     try {
       await saveTemplate({
         title,
         description,
         tiers: tiers.map(t => ({ label: t.label, color: t.color })),
         items: pool.map(i => ({ src: i.src })),
-        createdAt: Date.now(),
       })
-      window.location.href = '/'
+      window.location.href = `${base}/`
+    }
+    catch (err) {
+      saveError = err instanceof Error ? err.message : 'Failed to save template'
     }
     finally {
       saving = false
@@ -269,6 +283,10 @@
       {/if}
     </div>
   </section>
+
+  {#if saveError}
+    <p class='save-error'>{saveError}</p>
+  {/if}
 
   <Button onclick={save} full disabled={saving || !title.trim() || pool.length === 0 || tiers.length === 0}>
     {saving ? 'Saving...' : 'Save Template'}
@@ -639,5 +657,12 @@
     max-height: 90vh;
     object-fit: contain;
     border-radius: var(--radius-lg);
+  }
+
+  .save-error {
+    color: var(--color-danger);
+    font-size: 0.85rem;
+    margin: 0;
+    text-align: center;
   }
 </style>

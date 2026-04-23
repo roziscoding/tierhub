@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-#MISE description="Run svelte-check for type checking"
+#MISE description="Run type checking for all workspaces"
 set -euo pipefail
-bun run svelte-check --tsconfig ./tsconfig.json
+bun run --filter '@tierhub/frontend' check && bun run --filter '@tierhub/backend' check

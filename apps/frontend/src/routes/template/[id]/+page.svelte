@@ -3,8 +3,8 @@
 
   import { base } from '$app/paths'
   import { page } from '$app/stores'
+  import { getTemplate } from '$lib/api'
   import TierlistEditor from '$lib/components/TierlistEditor.svelte'
-  import { getTemplate } from '$lib/db'
   import { onMount } from 'svelte'
 
   let title = $state('')
@@ -14,10 +14,10 @@
   let loading = $state(true)
 
   onMount(async () => {
-    const id = Number($page.params.id)
+    const id = $page.params.id as string
     const template = await getTemplate(id)
     if (!template) {
-      window.location.href = '/'
+      window.location.href = `${base}/`
       return
     }
     title = template.title
